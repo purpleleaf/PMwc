@@ -212,7 +212,7 @@ while [ -p "$action_pipe" ] && [ -p "$cmd_pipe" ] && ps -p $spid 2>&1 >/dev/null
             case "$dialog_drop1" in
 
                 $single )
-                    kill $(ps aux | grep 'var/pmwc' | awk '{print $2}') > /dev/null 2>&1
+                    kill $(ps aux | grep 'lib/pmwc' | awk '{print $2}') > /dev/null 2>&1
                     echo "$dialog_chooser1_dir" > "$chooser1_def_file"
                     sed  -i '/pmwc/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
                     sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
@@ -221,7 +221,7 @@ while [ -p "$action_pipe" ] && [ -p "$cmd_pipe" ] && ps -p $spid 2>&1 >/dev/null
                     break
                     ;;
                 $random )
-                    kill $(ps aux | grep 'var/pmwc' | awk '{print $2}') > /dev/null 2>&1                
+                    kill $(ps aux | grep 'lib/pmwc' | awk '{print $2}') > /dev/null 2>&1                
                     echo "$dialog_chooser1_dir" > "$chooser1_def_file"
                     sed  -i '/pmwc/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
                     sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
@@ -230,7 +230,7 @@ while [ -p "$action_pipe" ] && [ -p "$cmd_pipe" ] && ps -p $spid 2>&1 >/dev/null
                     break
                     ;;
                 $bing )
-                    kill $(ps aux | grep 'var/pmwc' | awk '{print $2}') > /dev/null 2>&1
+                    kill $(ps aux | grep 'lib/pmwc' | awk '{print $2}') > /dev/null 2>&1
                     echo "$dialog_chooser1_dir" > "$chooser1_def_file"
                     sed  -i '/pmwc/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
                     sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
@@ -245,7 +245,7 @@ while [ -p "$action_pipe" ] && [ -p "$cmd_pipe" ] && ps -p $spid 2>&1 >/dev/null
                     break
                     ;;
                 $unsplash )
-                    kill $(ps aux | grep 'var/pmwc' | awk '{print $2}') > /dev/null 2>&1
+                    kill $(ps aux | grep 'lib/pmwc' | awk '{print $2}') > /dev/null 2>&1
                     echo "$dialog_chooser1_dir" > "$chooser1_def_file"
                     sed  -i '/pmwc/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
                     sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
