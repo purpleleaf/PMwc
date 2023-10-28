@@ -1,0 +1,113 @@
+#!/bin/bash
+# Original author: Whizzzkid (me@nishantarora.in)
+# Modified by: purpleleaf (max@ganoia.eu)
+#
+#    License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+#    https://creativecommons.org/licenses/by/4.0/
+#
+#    You are free to:
+#        Share - copy and redistribute the material in any medium or format
+#        Adapt - remix, transform, and build upon the material for any purpose
+#
+######################################################################
+
+# Dependencies: feh curl
+
+# Base URL.
+bing="http://www.bing.com"
+# API end point.
+api="/HPImageArchive.aspx?"
+# Response Format (json|xml).
+format="&format=js"
+# For day (0=current; 1=yesterday... so on).
+day="&idx=0"
+# Market for image.
+market="&mkt=it-IT"
+# API Constant (fetch how many).
+const="&n=1"
+# Image extension.
+extn=".png"
+# Size.
+size="1920x1200"
+# Collection Path.
+DIR=$1"/"
+# Directory Size limit
+
+MAXSIZE=$2
+
+# Make it run just once (useful to run as a cron)
+run_once=false
+if  [ "$3" = "runonce" ]; then
+      run_once=true
+fi
+########################################################################
+#### DO NOT EDIT BELOW THIS LINE #######################################
+########################################################################
+
+# Check directory size limit
+# thanks to https://stackoverflow.com/questions/25514434/bash-script-to-keep-deleting-files-until-directory-size-is-less-than-x
+
+if [ ! -z "$MAXSIZE" ] && [ "$MAXSIZE" -gt 0 ] 
+    then
+    while [ $( du -sB 1M "$DIR" | cut -f 1 ) -gt "$MAXSIZE" ]
+    do
+      find $DIR -maxdepth 1 -type f -printf '%T@\t%p\n' | sort -n | head -n 1 | cut -d $'\t' -f 2-  | xargs -d '\n' rm -f
+      echo $MAXSIZE
+    done
+else
+    echo "\$2 is not an integer. Please set an integer value for wallpaper directory maximum size," >&2; exit 1
+fi
+# Required Image Uri.
+reqImg=$bing$api$format$day$market$const
+while [ 1 ]
+do
+  # Fetching API response.
+  for (( c=1; c<=3; c++ ))
+  do  
+    apiResp=$(curl -s $reqImg)
+    if [ $? -gt 0 ]; then
+        echo "Ping failed! Try $c"
+        if [ $c -eq 1 ]; then
+           eval "`zzzfm -g --label "\n\nImpossibile impostare il wallpaper odierno di Bing \nControllate la rete.\nPremi OK se vuoi avviare PMwc per scaricarlo se hai risolto il problema" \
+                   --button ok  --button cancel --window-icon variety --title "PMwc Bing Wallpaper"`"
+           if [[ "$dialog_pressed" == "button1" ]]; then
+                      pmwc & disown
+             exit 1 
+           else
+             exit 1
+           fi
+        fi
+        sleep 1
+    fi
+  done
+  # Default image URL in case the required is not available.
+  defImgURL=$bing$(echo $apiResp | grep -oP "url\":\"[^\"]*" | cut -d "\"" -f 3)
+  # Req image url (raw).
+  reqImgURL=$bing$(echo $apiResp | grep -oP "urlbase\":\"[^\"]*" | cut -d "\"" -f 3)"_"$size$extn
+  # Image copyright.
+  copyright=$(echo $apiResp | grep -oP "copyright\":\"[^\"]*" | cut -d "\"" -f 3)
+  # Getting Image Name.
+  imgName=$(echo $copyright | sed "s/([^)]*)//g" | tr -c '[:alnum:]' '-')"-"$size$extn
+  # Create Path Dir.
+  if [[ ! -d "$DIR" ]]; then
+    mkdir -p $DIR
+  fi  
+
+  # Saving Image to collection.
+  curl -L -s -o $DIR$imgName $defImgURL
+  # Writing copyright.
+  #echo "$copyright" > $DIR${imgName/%.jpg/.txt}
+  
+  # set backgroun
+  /usr/bin/feh --bg-scale $DIR$imgName
+
+#  echo "New wallpaper set successfully."
+  
+  # If -1 option was passed just run once
+  if [ $run_once == true ];then
+    exit
+  fi
+
+  # Re-checks for updates every 3 hours.
+  sleep 10800
+done

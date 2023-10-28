@@ -1,0 +1,59 @@
+#!/bin/bash
+# Original author: purpleleaf (max@ganoia.eu)
+#
+#    License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+#    https://creativecommons.org/licenses/by/4.0/
+#
+#    You are free to:
+#        Share - copy and redistribute the material in any medium or format
+#        Adapt - remix, transform, and build upon the material for any purpose
+#
+######################################################################
+
+# Dependencies: feh curl
+
+# Wallpaper Directory Path.
+DIR=$1
+# Wallpaper size
+RESOLUTION=$2
+# Unsplash search terms
+KEYWORDS=$3
+# Time before a new wallpepar will be set
+INTERVAL=$4
+# Wallpaper directory maximum in MB
+MAXSIZE=$5
+
+while true; do
+    #Unsplash base url
+    UnsplashURL="https://source.unsplash.com/$RESOLUTION/?$KEYWORDS"
+	# getting filename with curl
+	UnsplashURL=`curl -L --head -w '%{url_effective}' $UnsplashURL 2>/dev/null | tail -n1`	
+	# deleting https from filename
+	FILE="${UnsplashURL#https://images.unsplash.com/}"
+	# deleting all URL parameters leaving file name only
+	FILE=${FILE%\?*}"-$RESOLUTION.jpg"
+	# downloading file if not already exist
+	if [ -f "$DIR/$FILE" ]; then
+    	feh --bg-scale $DIR/$FILE
+	else
+	curl -o $DIR/$FILE $UnsplashURL
+	    if [[ "$?" != 0 ]]; then
+	      eval "`zzzfm -g --label "\n\nIt's not possible set Unsplash Wallpaper \nError n. $? . \
+	      Check your network.\Run the script $0 from terminal\nAny error will be reported verranno from shell" \
+	      --button ok  --button cancel --window-icon variety --icon dialog-error --title "PMwc Unsplash Wallpaper"`"
+          #dunstify -i error "Errore n. $? nello scaricamento del wallpaper" "\rEseguire lo script $0 da terminale\rEventuali errori verranno riportati nella shell"
+        exit 1
+    	else
+    		feh --bg-scale $DIR/$FILE
+    	fi
+	fi
+    if [ -z $MAXSIZE  ] && [ $MAXSIZE -gt 0 ]
+    then 
+      # thanks to https://stackoverflow.com/questions/25514434/bash-script-to-keep-deleting-files-until-directory-size-is-less-than-x
+      while [ $( du -sB 1M $DIR | cut -f 1 ) -gt $MAXSIZE ]
+      do
+        find $DIR -maxdepth 1 -type f -printf '%T@\t%p\n' | sort -n | head -n 1 | cut -d $'\t' -f 2-  | xargs -d '\n' rm -f
+      done
+    fi
+	sleep ${INTERVAL}m
+done

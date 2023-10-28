@@ -1,0 +1,309 @@
+#!/bin/bash
+# SpaceFM Dialog Poor Man Wallpaper Changer
+#    Copyright (C) 2016 IgnorantGuru <ignorantguru@gmx.com>
+#    Copyright (C) 2021 purpleleaf <max@ganoia.eu>
+#
+#    License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+#    https://creativecommons.org/licenses/by/4.0/
+#
+#    You are free to:
+#        Share - copy and redistribute the material in any medium or format
+#        Adapt - remix, transform, and build upon the material for any purpose
+
+######################################################################
+# Accept --config-dir|-c DIR on command line
+$fm_import  # use this in case this script run as SpaceFM custom command
+# If you run multiple instances of this application script, each should use a
+# different config dir.  
+if [ "$1" = "--config-dir" ] || [ "$1" = "-c" ]; then
+    # config dir specified on command line
+    fm_cmd_data="$2"
+    shift 2
+fi
+if [ "$fm_cmd_data" = "" ]; then
+    # not run from within SpaceFM and no config dir specified - use home dir
+    fm_cmd_data=~/.config/pmwc
+fi
+
+######################################################################
+# A convenience function to set data file defaults
+set_default()  # $1=file  $2=default value
+{
+    val="`head -n 1 "$1" 2>/dev/null`"
+    if [ "$val" = "" ]; then
+        echo "$2" > "$1"
+    fi
+}
+
+######################################################################
+# A convenience function download from unsplash - not used at the moment
+#unsplash () {
+
+#DIR=$1
+#SIZE=$2
+#KEYWORDS=$3
+#INTERVAL=$4
+
+#if ! [[ "$INTERVAL" =~ ^[0-9]+$ ]]
+#  then
+#     INTERVAL="15"
+#fi
+
+#while true; do
+#    FILE="photo-"`date +%F-%T`".jpg"
+    #Unsplash base url
+#    UnsplashURL="https://source.unsplash.com/$SIZE/?$KEYWORDS"
+
+#    wget $UnsplashURL -O $DIR/$FILE
+#        feh --bg-scale $DIR/$FILE
+#    if [[ "$?" != 0 ]]; then
+#        notify-send -i error "Errore n. $? nello scaricamento del wallpaper" "\rEseguire lo script $0\rEventuali errori verranno riportati nella shell"
+#    else
+#        spacefm --set-wallpaper $DIR/$FILE
+#    fi
+#	sleep ${INTERVAL}m
+#done
+
+#}
+
+######################################################################
+# Set Dialog Data Files
+mkdir -p "$fm_cmd_data"
+winsize_file="$fm_cmd_data/winsize"
+set_default "$winsize_file" "900x700"  # Default dialog size
+unsplash_resolution_file="$fm_cmd_data/unsplash_resolution"
+set_default "$unsplash_resolution_file" "1920x1280"  
+unsplash_interval_file="$fm_cmd_data/unsplash_interval"
+set_default "$unsplash_interval_file" "15"
+dirsize_file="$fm_cmd_data/dirsize"
+set_default "$dirsize_file" "100"
+input1_file="$fm_cmd_data/input1"
+drop1_def_file="$fm_cmd_data/drop1_def"
+label4_def_file="$fm_cmd_data/label4_def"
+chooser1_def_file="$fm_cmd_data/chooser1_def"
+source_file="$fm_cmd_data/source"
+rm -f "$source_file"
+
+######################################################################
+# Create Pipes
+# cmd_pipe is used to send commands to the running dialog
+cmd_pipe="$fm_cmd_data/cmd-pipe"
+# action_pipe is used to process dialog actions in the main loop
+action_pipe="$fm_cmd_data/action-pipe"
+rm -f "$cmd_pipe" "$action_pipe"
+mkfifo "$cmd_pipe"
+mkfifo "$action_pipe"
+
+######################################################################
+# Prepare Dialog Data
+single="Set single wallper"
+random="Set Random wallpaper from disk"
+unsplash="Set random wallpaper from Unsplash"
+bing="Set daily Bing wallpaper"
+choice_list=("$single" "$random" "$unsplash" "$bing")
+#Prepare size dropdown list for unsplash script
+unsplash_resolution=("800x600" "1024x768" "1024x1024" "1080x1200" "1152x864" "1280x768" "1280x800" "1366x768" "1440x900" \
+"1440x1080" "1680x1050" "1920x1440" "1920x1280" "2048x1536" "2560x1440" "2560x1600" "2732x2048" "3840x2160" "4096x3072" \
+"6016x3384" "6400x4800" "8192x4608")
+unsplash_interval=("5" "10" "15" "20" "25" "30" "35" "40" "45" "50" "55" "60" "70" "80" "90" "120" "180")
+dirsize=("0" "100" "200" "300" "400" "500" "600" "700" "800" "900" "1000")
+# Set default drop list to First Choice 
+set_default "$drop1_def_file" "${choice_list[0]}"
+set_default "$chooser1_def_file" "/usr/share/backgrounds/"
+
+######################################################################
+# Set Dialog Drop choice description and default
+
+single_desc='Select an image from file chooser and apply to set wallpaper.\nYou can also preview a wallpaper by double cliccking on it.\nMake sure to not select a directory before applying.'
+random_desc='Select a directory from directory chooser and apply to set random wallpaper wallpaper.\nYou can also preview the wallpapers on the directory by double cliccking on them.\nYou can also set the time to load a new wallpaper: please enter only integer numbers in the "Reload interval" field; if you insert any other character the time will be set to default (15 minutes).'
+bing_desc='Bing wallpaper of the day will be downloaded and setted.\nWallpaper will be updated at every login.\nThe wallpaper will be saved to the choosen directory.\nYou can also preview the wallpapers on the directory by double cliccking on them.\nThe directory size limit field allo you to set a maxim directory size in MegaBytes. Please enter only integer numbers and a value smaller then 1000 Mb. If you set non integer or a value bigger then 1000, the size limit will be disabled'
+unsplash_desc='Unsplash wallpapers will be donwloaded and saved to the choosed directory.\nYou can also preview the wallpapers on the directory by double cliccking on them.\nThe search keywords field allow you to set some terms, separated by colon (ex. animals,featured)\nYou can also set the time to load a new wallpaper, in minutes: please enter only integer numbers in the "Reload interval" field; if you insert any other character the time will be set to default (15 minutes).\nThe directory size limit field allo you to set a maxim directory size in MegaBytes. Please enter only integer numbers and a value smaller then 1000 Mb. If you set non integer or a value bigger then 1000, the size limit will be disabled'
+
+set_default "$label4_def_file" "$single_desc"
+
+######################################################################
+# Show Dialog
+zzzfm -g  --hbox \
+            --title "PMwc" \
+            --window-size "@$winsize_file" \
+            --window-icon variety \
+            --vbox \
+            --label "Click Apply button to set an item from the dropdown list:" \
+            --drop "${choice_list[@]}" -- "@$drop1_def_file" \
+                       bash -c "echo chose > '$action_pipe'" \
+            --vsep \
+            --label "Unspslash serch keywords:" \
+            --input --compact "@$input1_file" \
+            --label "Unsplash wallpaper size:" \
+            --drop "${unsplash_resolution[@]}" -- "@$unsplash_resolution_file" \
+                       bash -c "echo un_size > '$action_pipe'" \
+            --label "Reload interval:" \
+            --combo  "${unsplash_interval[@]}" -- "@$unsplash_interval_file" \
+                        bash -c "echo un_interval > '$action_pipe'" \
+			--label "Directory Size Limit:" \
+			--combo "${dirsize[@]}" -- "@$dirsize_file" \
+                        bash -c "echo dirsize > '$action_pipe'" \
+            --vsep \
+            --label "Wallpaper selection description:" \
+            --label "@$label4_def_file" \
+            --close-box \
+            --vbox \
+            --label "Select wallpaper directory:" \
+            --chooser --filter '*.png:*.jpg:*.jpeg:*.bmp' -- "@$chooser1_def_file" set image1 '%(/usr/lib/pmwc/wallthumb %v)' \
+                bash -c "echo chose > '$action_pipe'" \
+            --image \
+            --button apply bash -c "echo apply > '$action_pipe'" \
+            --button close source /dev/null -- \
+                  bash -c "echo cancel > '$action_pipe'" -- close \
+            --window-close source /dev/null -- \
+                  bash -c "echo cancel > '$action_pipe'" -- close \
+            --close-box \
+            --close-box \
+            --command "$cmd_pipe" > /dev/null &
+
+# Get the running dialog's process ID
+spid=$!
+
+######################################################################
+# Main Loop
+# This loop responds to actions in the dialog.
+
+while [ -p "$action_pipe" ] && [ -p "$cmd_pipe" ] && ps -p $spid 2>&1 >/dev/null; do
+	read <> "$action_pipe"
+    if [ $? -eq 0 ]; then
+        action="$REPLY"
+    else
+        action=""
+    fi
+
+    # Get dialog values
+    if [ "$action" != "" ] && [ "$action" != "cancel" ]; then
+        # There is a non-cancel action, so tell dialog to create a source
+        # file so we can get current dialog values
+        echo "source $source_file" > "$cmd_pipe" &
+        sleep 0.1  # allow time for file creation
+        if [ -e "$source_file" ]; then
+            # Read the source file to update dialog values (eg $dialog_input1)
+            source "$source_file"
+            rm -f "$source_file"
+        fi
+    fi
+    
+    # process action
+    case "$action" in
+        un_interval )
+            touch "`date`"
+            ;;
+        apply )
+            # User pressed Apply button
+            
+            # Check sanity of combos values
+            if ! [[ "$dialog_combo1" =~ ^[0-9]+$ ]] || [[ "$dialog_combo1" -eq 0 ]]
+                then
+                 dialog_combo1="15"
+            fi
+            echo -e "$dialog_combo1" > "$unsplash_interval_file" &
+            if ! [[ "$dialog_combo2" =~ ^[0-9]+$ ]] || [[ "$dialog_combo2" -gt "1000" ]] || [[ "$dialog_combo2" -eq 0 ]]
+                then
+                 dialog_combo2="100"
+            fi
+            echo -e "$dialog_combo2" > "$dirsize_file" &
+                        
+            case "$dialog_drop1" in
+
+                $single )
+                    kill $(ps aux | grep 'var/pmwc' | awk '{print $2}') > /dev/null 2>&1
+                    echo "$dialog_chooser1_dir" > "$chooser1_def_file"
+                    sed  -i '/pmwc/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
+                    sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
+                    echo $HOME'/.fehbg &' >> $HOME/.config/openbox/autostart
+                    /usr/bin/feh --bg-scale $dialog_chooser1 &
+                    break
+                    ;;
+                $random )
+                    kill $(ps aux | grep 'var/pmwc' | awk '{print $2}') > /dev/null 2>&1                
+                    echo "$dialog_chooser1_dir" > "$chooser1_def_file"
+                    sed  -i '/pmwc/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
+                    sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
+                    echo '/usr/lib/pmwc/random '"$dialog_chooser1_dir" "$dialog_combo1"' &' >> $HOME/.config/openbox/autostart
+                    /usr/lib/pmwc/random "$dialog_chooser1_dir" "$dialog_combo1" &
+                    break
+                    ;;
+                $bing )
+                    kill $(ps aux | grep 'var/pmwc' | awk '{print $2}') > /dev/null 2>&1
+                    echo "$dialog_chooser1_dir" > "$chooser1_def_file"
+                    sed  -i '/pmwc/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
+                    sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
+                    if [ "$dialog_combo2" -gt 0 ]
+                        then
+                        echo /usr/lib/pmwc/bing-wallpaper "$dialog_chooser1_dir" "$dialog_combo2" "&" >> $HOME/.config/openbox/autostart
+                        /usr/lib/pmwc/bing-wallpaper "$dialog_chooser1_dir" "$dialog_combo2" &
+                        else
+                        echo /usr/lib/pmwc/bing-wallpaper "$dialog_chooser1_dir" "&" >> $HOME/.config/openbox/autostart
+                        /usr/lib/pmwc/bing-wallpaper "$dialog_chooser1_dir" &
+                     fi                        
+                    break
+                    ;;
+                $unsplash )
+                    kill $(ps aux | grep 'var/pmwc' | awk '{print $2}') > /dev/null 2>&1
+                    echo "$dialog_chooser1_dir" > "$chooser1_def_file"
+                    sed  -i '/pmwc/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
+                    sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
+                    if [ "$dialog_combo2" -gt 0 ]
+                        then                    
+                        echo  /usr/lib/pmwc/unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" \
+                        "$dialog_combo1" "$dialog_combo2" "&" >> $HOME/.config/openbox/autostart
+                        /usr/lib/pmwc/unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" "$dialog_combo1" "$dialog_combo2" &
+                        #unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" "$dialog_combo1" &
+                        else
+                        echo  /usr/lib/pmwc/unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" \
+                        "$dialog_combo1" "&" >> $HOME/.config/openbox/autostart
+                        /usr/lib/pmwc/unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" "$dialog_combo1" &                          
+                    fi
+                    break                    
+                    ;;
+            esac            
+            ;;
+        chose )
+            # The user made drop list choice
+            # Tell dialog to set the selected wallpaper setting method
+
+            case "$dialog_drop1" in
+                $single )
+                    echo -e "$single_desc" > "$label4_def_file" &
+                    ;;
+                $random )
+                    echo -e "$random_desc" > "$label4_def_file" &
+                    ;;
+                $bing )
+                    echo -e "$bing_desc" > "$label4_def_file" &
+                    ;;
+                $unsplash )
+                    echo -e "$unsplash_desc" > "$label4_def_file" &
+                    ;;
+            esac            
+            ;;
+        cancel )
+            # The dialog was closed by user action, break main loop
+            break
+            ;;
+
+    esac
+
+done
+
+######################################################################
+# Cleanup
+sleep 0.2  # allow dialog process to exit
+if ps -p $spid 2>&1 >/dev/null; then
+    if [ -p "$cmd_pipe" ]; then
+        # close dialog
+        echo "close" > "$cmd_pipe" &
+        sleep 1
+    fi
+    # make sure dialog is gone
+    kill $spid 2> /dev/null
+fi
+rm -f "$cmd_pipe" "$action_pipe" "$source_file"
+
+exit
