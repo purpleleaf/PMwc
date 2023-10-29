@@ -4,7 +4,7 @@ Poor Man wallpaper changer
 A wallpaper changer built on top of [Spacefm](http://ignorantguru.github.io/spacefm/spacefm-manual-en.html#dialog "Spacefm dialog")/[zzzfm](https://gitlab.com/antix-contribs/zzzfm) dialog
 
 
-##Dependencies
+## Dependencies
 
  - curl
  - imagemagick
