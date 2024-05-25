@@ -28,7 +28,7 @@ const="&n=1"
 # Image extension.
 extn=".png"
 # Size.
-size="1920x1200"
+size="1920x1080"
 # Collection Path.
 DIR=$1"/"
 # Directory Size limit
