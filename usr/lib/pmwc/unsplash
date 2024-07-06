@@ -22,6 +22,8 @@ KEYWORDS=$3
 INTERVAL=$4
 # Wallpaper directory maximum in MB
 MAXSIZE=$5
+# Set lock background if betterlockscreen is present
+do_lock=$6
 
 while true; do
     #Unsplash base url
@@ -39,7 +41,7 @@ while true; do
 	curl -o $DIR/$FILE $UnsplashURL
 	    if [[ "$?" != 0 ]]; then
 	      eval "`zzzfm -g --label "\n\nIt's not possible set Unsplash Wallpaper \nError n. $? . \
-	      Check your network.\Run the script $0 from terminal\nAny error will be reported verranno from shell" \
+	      Check your network.\Run the script $0 from terminal\nAny error will be reported from shell" \
 	      --button ok  --button cancel --window-icon variety --icon dialog-error --title "PMwc Unsplash Wallpaper"`"
           #dunstify -i error "Errore n. $? nello scaricamento del wallpaper" "\rEseguire lo script $0 da terminale\rEventuali errori verranno riportati nella shell"
         exit 1
@@ -47,6 +49,12 @@ while true; do
     		feh --bg-scale $DIR/$FILE
     	fi
 	fi
+
+  	if $do_lock
+	then
+		/usr/bin/betterlockscreen -u $DIR/$FILE &
+	fi
+		
     if [ -z $MAXSIZE  ] && [ $MAXSIZE -gt 0 ]
     then 
       # thanks to https://stackoverflow.com/questions/25514434/bash-script-to-keep-deleting-files-until-directory-size-is-less-than-x

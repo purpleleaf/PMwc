@@ -103,7 +103,7 @@ bing="Set daily Bing wallpaper"
 choice_list=("$single" "$random" "$unsplash" "$bing")
 #Prepare size dropdown list for unsplash script
 unsplash_resolution=("800x600" "1024x768" "1024x1024" "1080x1200" "1152x864" "1280x768" "1280x800" "1366x768" "1440x900" \
-"1440x1080" "1680x1050" "1920x1440" "1920x1080" "2048x1536" "2560x1440" "2560x1600" "2732x2048" "3840x2160" "4096x3072" \
+"1440x1080" "1680x1050" "1920x1440" "1920x1280" "2048x1536" "2560x1440" "2560x1600" "2732x2048" "3840x2160" "4096x3072" \
 "6016x3384" "6400x4800" "8192x4608")
 unsplash_interval=("5" "10" "15" "20" "25" "30" "35" "40" "45" "50" "55" "60" "70" "80" "90" "120" "180")
 dirsize=("0" "100" "200" "300" "400" "500" "600" "700" "800" "900" "1000")
@@ -120,6 +120,16 @@ bing_desc='Bing wallpaper of the day will be downloaded and setted.\nWallpaper w
 unsplash_desc='Unsplash wallpapers will be donwloaded and saved to the choosed directory.\nYou can also preview the wallpapers on the directory by double cliccking on them.\nThe search keywords field allow you to set some terms, separated by colon (ex. animals,featured)\nYou can also set the time to load a new wallpaper, in minutes: please enter only integer numbers in the "Reload interval" field; if you insert any other character the time will be set to default (15 minutes).\nThe directory size limit field allo you to set a maxim directory size in MegaBytes. Please enter only integer numbers and a value smaller then 1000 Mb. If you set non integer or a value bigger then 1000, the size limit will be disabled'
 
 set_default "$label4_def_file" "$single_desc"
+
+
+######################################################################
+# Set some useful variables
+# check if we should set the lockscreen background with betterlockscreen
+if command -v betterlockscreen > /dev/null 2>&1; then
+    do_lock=true
+else
+	do_lock=false
+fi
 
 ######################################################################
 # Show Dialog
@@ -218,6 +228,11 @@ while [ -p "$action_pipe" ] && [ -p "$cmd_pipe" ] && ps -p $spid 2>&1 >/dev/null
                     sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
                     echo $HOME'/.fehbg &' >> $HOME/.config/openbox/autostart
                     /usr/bin/feh --bg-scale $dialog_chooser1 &
+                    echo $dialog_chooser1 &
+                    if $do_lock
+                    then
+						/usr/bin/betterlockscreen -u $dialog_chooser1 &
+					fi
                     break
                     ;;
                 $random )
@@ -225,8 +240,8 @@ while [ -p "$action_pipe" ] && [ -p "$cmd_pipe" ] && ps -p $spid 2>&1 >/dev/null
                     echo "$dialog_chooser1_dir" > "$chooser1_def_file"
                     sed  -i '/pmwc/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
                     sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
-                    echo '/usr/lib/pmwc/random '"$dialog_chooser1_dir" "$dialog_combo1"' &' >> $HOME/.config/openbox/autostart
-                    /usr/lib/pmwc/random "$dialog_chooser1_dir" "$dialog_combo1" &
+                    echo '/usr/lib/pmwc/random '"$dialog_chooser1_dir" "$dialog_combo1" "$do_lock"' &' >> $HOME/.config/openbox/autostart
+                    /usr/lib/pmwc/random "$dialog_chooser1_dir" "$dialog_combo1" "$do_lock" &
                     break
                     ;;
                 $bing )
@@ -234,14 +249,8 @@ while [ -p "$action_pipe" ] && [ -p "$cmd_pipe" ] && ps -p $spid 2>&1 >/dev/null
                     echo "$dialog_chooser1_dir" > "$chooser1_def_file"
                     sed  -i '/pmwc/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
                     sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
-                    if [ "$dialog_combo2" -gt 0 ]
-                        then
-                        echo /usr/lib/pmwc/bing-wallpaper "$dialog_chooser1_dir" "$dialog_combo2" "&" >> $HOME/.config/openbox/autostart
-                        /usr/lib/pmwc/bing-wallpaper "$dialog_chooser1_dir" "$dialog_combo2" &
-                        else
-                        echo /usr/lib/pmwc/bing-wallpaper "$dialog_chooser1_dir" "&" >> $HOME/.config/openbox/autostart
-                        /usr/lib/pmwc/bing-wallpaper "$dialog_chooser1_dir" &
-                     fi                        
+                    echo /usr/lib/pmwc/bing-wallpaper "$dialog_chooser1_dir" "$dialog_combo2" "$do_lock" "&" >> $HOME/.config/openbox/autostart
+                    /usr/lib/pmwc/bing-wallpaper "$dialog_chooser1_dir" "$dialog_combo2" "$do_lock" &
                     break
                     ;;
                 $unsplash )
@@ -249,17 +258,9 @@ while [ -p "$action_pipe" ] && [ -p "$cmd_pipe" ] && ps -p $spid 2>&1 >/dev/null
                     echo "$dialog_chooser1_dir" > "$chooser1_def_file"
                     sed  -i '/pmwc/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
                     sed  -i '/fehbg/d' $HOME/.config/openbox/autostart > /dev/null 2>&1
-                    if [ "$dialog_combo2" -gt 0 ]
-                        then                    
-                        echo  /usr/lib/pmwc/unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" \
-                        "$dialog_combo1" "$dialog_combo2" "&" >> $HOME/.config/openbox/autostart
-                        /usr/lib/pmwc/unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" "$dialog_combo1" "$dialog_combo2" &
-                        #unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" "$dialog_combo1" &
-                        else
-                        echo  /usr/lib/pmwc/unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" \
-                        "$dialog_combo1" "&" >> $HOME/.config/openbox/autostart
-                        /usr/lib/pmwc/unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" "$dialog_combo1" &                          
-                    fi
+                    echo  /usr/lib/pmwc/unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" \
+                    "$dialog_combo1" "$dialog_combo2" "$do_lock" "&" >> $HOME/.config/openbox/autostart
+                    /usr/lib/pmwc/unsplash "$dialog_chooser1_dir" "$dialog_drop2" "$dialog_input1" "$dialog_combo1" "$dialog_combo2" "$do_lock" &
                     break                    
                     ;;
             esac            

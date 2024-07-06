@@ -28,16 +28,18 @@ const="&n=1"
 # Image extension.
 extn=".png"
 # Size.
-size="1920x1080"
+size="1920x1200"
 # Collection Path.
 DIR=$1"/"
 # Directory Size limit
 
 MAXSIZE=$2
 
+do_lock="$3"
+
 # Make it run just once (useful to run as a cron)
 run_once=false
-if  [ "$3" = "runonce" ]; then
+if  [ "$4" = "runonce" ]; then
       run_once=true
 fi
 ########################################################################
@@ -98,9 +100,14 @@ do
   # Writing copyright.
   #echo "$copyright" > $DIR${imgName/%.jpg/.txt}
   
-  # set backgroun
+  # set background
   /usr/bin/feh --bg-scale $DIR$imgName
-
+  
+  	if $do_lock
+	then
+		/usr/bin/betterlockscreen -u $DIR$imgName &
+	fi
+  
 #  echo "New wallpaper set successfully."
   
   # If -1 option was passed just run once

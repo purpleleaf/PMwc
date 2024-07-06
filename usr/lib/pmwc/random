@@ -13,20 +13,23 @@
 
 # Dependencies: feh
 
-DIR="$1"
+wallpaper_dir="$1"
+interval="$2"
+do_lock="$3"
 
-INTERVAL="$2"
-
-if ! [[ "$INTERVAL" =~ ^[0-9]+$ ]]
+if ! [[ "$interval" =~ ^[0-9]+$ ]]
   then
-     INTERVAL="15"
+     interval="15"
 fi
 
 while true; do
-	LIST=(`find "$DIR" -type f \( -name '*.jpg' -o -name '*.png' \)`)
-	RANDOM=$$$(date +%s)
-	WALLPAPER=${LIST[$RANDOM % ${#LIST[@]}]}
-	/usr/bin/feh --bg-scale "$WALLPAPER"
-	sleep ${INTERVAL}m
+	list=(`find "$wallpaper_dir" -type f \( -name '*.jpg' -o -name '*.png' \)`)
+	random=$$$(date +%s)
+	wallpaper=${list[$random % ${#list[@]}]}
+	/usr/bin/feh --bg-scale "$wallpaper"
+	if $do_lock
+	then
+		/usr/bin/betterlockscreen -u $wallpaper &
+	fi
+	sleep ${interval}m
 done
-
