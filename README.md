@@ -16,4 +16,4 @@ To use the unsplash provider you must [register a free developer account](https:
 
 ## Install
 
-Copy the content of usr directory to the correspondig directories of your filesystem.
+Copy the content of usr directory to the correspondig directories on your filesystem.
