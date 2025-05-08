@@ -12,7 +12,7 @@ To use the unsplash provider you must [register a free developer account](https:
  - imagemagick
  - feh
  - yad
- - Optiona betterlockscreen
+ - Optional [betterlockscreen](https://github.com/betterlockscreen/betterlockscreen)
 
 ## Install
 
