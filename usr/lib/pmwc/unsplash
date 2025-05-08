@@ -1,8 +1,7 @@
 #!/bin/bash
 # Original author: purpleleaf (max@ganoia.eu)
 #
-#    License: Creative Commons Attribution 4.0 International (CC BY 4.0)
-#    https://creativecommons.org/licenses/by/4.0/
+#    License: Creative Commons Attribution  4.0 International (CC BY 4.0)
 #
 #    You are free to:
 #        Share - copy and redistribute the material in any medium or format
@@ -10,58 +9,272 @@
 #
 ######################################################################
 
-# Dependencies: feh curl
+# Dependencies: feh curl yad jq - optional betterlockscreen
 
+# Check if required dependencies are installed
+REQUIRED_PKGS=("feh" "curl" "jq" "yad")
+MISSING_PKGS=()
+
+for pkg in "${REQUIRED_PKGS[@]}"; do
+  if ! command -v "$pkg" &> /dev/null; then
+    MISSING_PKGS+=("$pkg")
+  fi
+done
+
+if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
+  message="Error: The following required packages are missing:\n\n"
+  message+="$(printf "%s\n" "${MISSING_PKGS[@]}")\n\n"
+  message+="Please install them before running the script."
+
+  if [ "$DISPLAY" ] || [ "$WAYLAND_DISPLAY" ] && command -v yad &> /dev/null; then
+    yad --title="Missing Dependencies" --text-info --filename=<(echo -e "$message") --button="OK:1" --window-icon="$ICON_PATH" --geometry=400x300
+  else
+    echo -e "$message"
+  fi
+  exit 1
+fi
+
+ICON_PATH="/usr/share/icons/hicolor/scalable/apps/csd-background.svg"
+
+# Check if 6 parameters are passed to the script
+if [ "$#" -ne 6 ]; then
+  message="This code is meant to be invoked by Poor Man Wallpaper Changer.
+First you must create ~/.config/pmwc/unsplash file and put into it your unsplash api key
+in the form API_KEY=\"your_api_key\"
+If you want to run it alone, please invoke the script with the following parameters:
+$0 [DIR] [RESOLUTION] [KEYWORD] [INTERVAL] [MAXSIZE] [DO_LOCK]
+
+Options:
+  DIR           Wallpaper Directory Path.
+  RESOLUTION    Wallpaper Resolution in widthxheight format (e.g., 1920x1080).
+  KEYWORD       Unsplash search terms - comma separated list of search keywords, only one will be randomly chosen.
+  INTERVAL      Time before a new wallpaper will be set (in minutes).
+  MAXSIZE       Wallpaper directory maximum size in MB.
+  DO_LOCK       Set lock background if betterlockscreen is present (true/false)."
+  
+  if [ "$DISPLAY" ] || [ "$WAYLAND_DISPLAY" ]; then
+    yad --title="Error" --text-info --filename=<(echo -e "$message") --button="OK:1" --window-icon="$ICON_PATH" --geometry=400x300
+  else
+    echo -e "$message"
+  fi
+  exit 1
+fi
+
+# Expand ~ to the full path of the home directory if present
+if [[ "$1" == ~* ]]; then
+  DIR="${1/#\~/$HOME}"
+else
+  DIR="$1"
+fi
+
+# Remove trailing slash from DIR if present
+DIR="${DIR%/}"
+
+# Initialize variables - All must be set - no check here
 # Wallpaper Directory Path.
-DIR=$1
-# Wallpaper size
+# DIR=$1 (commented out since it's expanded above)
+# Wallpaper Resolution in widthxheight format ex. 1920x1080
 RESOLUTION=$2
-# Unsplash search terms
-KEYWORDS=$3
-# Time before a new wallpepar will be set
+# Unsplash search terms - comma separated list of search keywords, only one will be randomly choosen
+KEYWORD=$3
+# Time before a new wallpaper will be set
 INTERVAL=$4
 # Wallpaper directory maximum in MB
 MAXSIZE=$5
 # Set lock background if betterlockscreen is present
-do_lock=$6
+DO_LOCK=$6
 
+WIDTH=$(echo "$RESOLUTION" | cut -d'x' -f1)
+HEIGHT=$(echo "$RESOLUTION" | cut -d'x' -f2)
+
+# Configuration file path
+CONFIG_FILE="$HOME/.config/pmwc/unsplash"
+
+# Source the API key from the configuration file if it exists
+if [ -f "$CONFIG_FILE" ]; then
+  source "$CONFIG_FILE"
+fi
+
+# Function to prompt the user for a new API key and update the configuration file
+prompt_for_api_key() {
+  local optional_message="$1"
+  local base_message="You need an Unsplash API Key. If you already have one, please enter it.\n\nVisit <a href='https://unsplash.com/documentation#getting-started'>https://unsplash.com/documentation#getting-started</a> to obtain it otherwise.\n\n"
+
+  if [ -n "$optional_message" ]; then
+    message="$optional_message\n\n$base_message"
+  else
+    message="$base_message"
+  fi
+
+  API_KEY=$(yad --form --title="Unsplash API Key" --field="${message}":LBL '' --field="API Key: " "" --window-icon="$ICON_PATH" --geometry=400x300 --button="Exit:1" --button="OK:0")
+  if [ $? -eq 1 ]; then
+    echo "Exiting..."
+    exit 1
+  fi
+  API_KEY=$(echo "$API_KEY" | cut -d'|' -f2)  # Extract the actual API key from the pipe-separated format
+  
+  # Check if the user provided an API key
+  if [ -z "$API_KEY" ]; then
+    echo "No API key provided. Exiting..."
+    exit 1
+  fi
+  
+  # Create the configuration directory if it doesn't exist
+  mkdir -p "$(dirname "$CONFIG_FILE")"
+  
+  # Append the API key to the configuration file and set file permissions
+  echo "API_KEY=\"$API_KEY\"" > "$CONFIG_FILE"
+  chmod 600 "$CONFIG_FILE"
+  
+  # Source the new API key
+  source "$CONFIG_FILE"
+}
+
+# Check if API_KEY is set
+if [ -z "$API_KEY" ]; then
+  prompt_for_api_key ""
+fi
+
+# Function to fetch the image
+fetch_image() {
+  API_URL="https://api.unsplash.com/photos/random?client_id=${API_KEY}&orientation=landscape"
+  
+  if [ -n "$KEYWORD" ]; then
+    # Convert the comma-separated list of keywords into an array
+    IFS=',' read -r -a KEYWORD_ARRAY <<< "$KEYWORD"
+    
+    # Select a random keyword from the array
+    RANDOM_KEYWORD=${KEYWORD_ARRAY[$RANDOM % ${#KEYWORD_ARRAY[@]}]}
+    
+    # Add the keyword to the API URL
+    API_URL="${API_URL}&query=${RANDOM_KEYWORD}"
+  fi
+
+  RESPONSE=$(curl -s -w "%{http_code}" -o response.json "$API_URL")
+  HTTP_STATUS=$(tail -n1 <<< "$RESPONSE")
+
+  # Check the HTTP status code
+  case "$HTTP_STATUS" in
+    200)
+      # echo "Success: Metadata fetched."
+      :
+      ;;
+    400)
+      yad --title="Error" --text-info --filename=<(echo -e "Unsplash Error 400: Bad Request.\nPlease check the search keywords and parameters.") --button="OK:1" --window-icon="$ICON_PATH" --geometry=400x300
+      rm -f response.json
+      exit 1
+      ;;
+    401)
+      rm -f response.json
+      prompt_for_api_key "Unsplash Error 401: Unauthorized.\nPlease check your API key."
+      fetch_image  # Retry fetching the image with the new API key
+      return
+      ;;
+    403)
+      yad --title="Error" --text-info --filename=<(echo -e "Unsplash Error 403: Forbidden.\nYou might have reached the API rate limit.") --button="OK:1" --window-icon="$ICON_PATH" --geometry=400x300
+      rm -f response.json
+      exit 1
+      ;;
+    404)
+      yad --title="Error" --text-info --filename=<(echo -e "Unsplash Error 404: Not Found.\nNo images match the search criteria.") --button="OK:1" --window-icon="$ICON_PATH" --geometry=400x300
+      rm -f response.json
+      exit 1
+      ;;
+    500)
+      yad --title="Error" --text-info --filename=<(echo -e "Unsplash Error 500: Internal Server Error.\nPlease try again later.") --button="OK:1" --window-icon="$ICON_PATH" --geometry=400x300
+      rm -f response.json
+      exit 1
+      ;;
+    *)
+      yad --title="Error" --text-info --filename=<(echo -e "Unsplash Unexpected Error: HTTP status $HTTP_STATUS") --button="OK:1" --window-icon="$ICON_PATH" --geometry=400x300
+      rm -f response.json
+      exit 1
+      ;;
+  esac
+
+  # Extract the sponsorship field
+  SPONSORSHIP=$(jq -r '.sponsorship' response.json)
+
+  if [ "$SPONSORSHIP" != "null" ]; then
+    # echo "Skipped: The image is a promotional photo. Retrying..."
+    rm -f response.json
+    fetch_image  # Retry fetching another image
+  fi
+}
+
+# Start the wallpaper changing loop
 while true; do
-    #Unsplash base url
-    UnsplashURL="https://source.unsplash.com/$RESOLUTION/?$KEYWORDS"
-	# getting filename with curl
-	UnsplashURL=`curl -L --head -w '%{url_effective}' $UnsplashURL 2>/dev/null | tail -n1`	
-	# deleting https from filename
-	FILE="${UnsplashURL#https://images.unsplash.com/}"
-	# deleting all URL parameters leaving file name only
-	FILE=${FILE%\?*}"-$RESOLUTION.jpg"
-	# downloading file if not already exist
-	if [ -f "$DIR/$FILE" ]; then
-    	feh --bg-scale $DIR/$FILE
-	else
-	curl -o $DIR/$FILE $UnsplashURL
-	    if [[ "$?" != 0 ]]; then
-	      eval "`zzzfm -g --label "\n\nIt's not possible set Unsplash Wallpaper \nError n. $? . \
-	      Check your network.\Run the script $0 from terminal\nAny error will be reported from shell" \
-	      --button ok  --button cancel --window-icon variety --icon dialog-error --title "PMwc Unsplash Wallpaper"`"
-          #dunstify -i error "Errore n. $? nello scaricamento del wallpaper" "\rEseguire lo script $0 da terminale\rEventuali errori verranno riportati nella shell"
-        exit 1
-    	else
-    		feh --bg-scale $DIR/$FILE
-    	fi
-	fi
 
-  	if $do_lock
-	then
-		/usr/bin/betterlockscreen -u $DIR/$FILE &
-	fi
-		
-    if [ -z $MAXSIZE  ] && [ $MAXSIZE -gt 0 ]
-    then 
-      # thanks to https://stackoverflow.com/questions/25514434/bash-script-to-keep-deleting-files-until-directory-size-is-less-than-x
-      while [ $( du -sB 1M $DIR | cut -f 1 ) -gt $MAXSIZE ]
-      do
-        find $DIR -maxdepth 1 -type f -printf '%T@\t%p\n' | sort -n | head -n 1 | cut -d $'\t' -f 2-  | xargs -d '\n' rm -f
-      done
+  fetch_image  # Call the function to fetch the image
+
+  # Extract the raw image URL and slug
+  IMAGE_URL=$(jq -r '.urls.raw' response.json)
+  # In the context of Unsplash, a slug is a human-readable, unique identifier for an image that is usually derived from the image's title or name.
+  SLUG=$(jq -r '.slug' response.json | sed 's/-[^-]*$//')
+
+  rm -f response.json  # Remove the temporary response file
+
+  if [ -z "$IMAGE_URL" ]; then
+    yad --title="Error" --text-info --filename=<(echo -e "Failed to fetch image URL.\nPlease check your API key and parameters.") --button="OK:1" --window-icon="$ICON_PATH" --geometry=400x300
+    exit 1
+  fi
+
+  if [ -z "$SLUG" ]; then
+    # Fallback: Use the search keyword and a timestamp
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    SLUG="${RANDOM_KEYWORD}_${TIMESTAMP}"
+  fi
+
+  # Append resolution parameters to the image URL with fit=crop and crop=entropy
+  IMAGE_URL="${IMAGE_URL}&w=${WIDTH}&h=${HEIGHT}&fit=crop&crop=entropy"
+
+  # Generate a descriptive file name
+  FILE_NAME="${SLUG}-${RESOLUTION}.jpg"
+
+  # Download the image with the descriptive file name
+  # echo "Downloading the image as '${FILE_NAME}'..."
+  CURL_ERROR_DESC=$(curl -o "${DIR}/${FILE_NAME}" "${IMAGE_URL}" 2>&1)
+  CURL_ERROR_CODE=$?
+
+  if [ $CURL_ERROR_CODE -ne 0 ]; then
+    # Print the cURL error response code
+    yad --title="Error" --text-info --filename=<(echo -e "Failed to download the image.\n${CURL_ERROR_CODE}: ${CURL_ERROR_DESC}") --button="OK:1" --window-icon="$ICON_PATH" --geometry=400x300
+  else
+    # echo "Image successfully downloaded as '${FILE_NAME}'."
+
+    # Attempt to set wallpaper with feh and capture errors
+    FEH_RESULT_DESC=$(feh --bg-scale "${DIR}/${FILE_NAME}" 2>&1)
+    FEH_RESULT_CODE=$?
+
+    # Check if feh failed
+    if [ $FEH_RESULT_CODE -ne 0 ]; then
+      message="Error: 'feh' failed to set the wallpaper.\n\n"
+      message+="Error Details:\n${FEH_RESULT_DESC}\n\n"
+      message+="Would you like to stop the Unsplash wallpaper changer?"
+  
+      yad --title="Wallpaper Error" --text-info --filename=<(echo -e "$message") \
+        --button="Cancel:1" --button="OK:0" --window-icon="$ICON_PATH" --geometry=400x300
+  
+      if [ $? -eq 0 ]; then
+        echo "Stopping script due to feh failure."
+      exit 1
+      fi
     fi
-	sleep ${INTERVAL}m
+
+    if [ "$DO_LOCK" = true ]; then
+      # Lock the screen if the download was successful and betterlockscreen is present
+      /usr/bin/betterlockscreen -u "${DIR}/${FILE_NAME}" &
+    fi
+  fi
+
+  # Check if the specified directory exceeds the maximum allowed size
+  if [ -n "$MAXSIZE" ] && [ "$MAXSIZE" -gt 0 ]; then
+    # Thanks to https://stackoverflow.com/questions/25514434/bash-script-to-keep-deleting-files-until-directory-size-is-less-than-x
+    while [ "$(du -sB 1M "$DIR" | cut -f 1)" -gt "$MAXSIZE" ]; do
+      find "$DIR" -maxdepth 1 -type f -printf '%T@\t%p\n' | sort -n | head -n 1 | cut -d $'\t' -f 2- | xargs -d '\n' rm -f
+    done
+  fi
+
+  sleep "${INTERVAL}m"
+
 done
